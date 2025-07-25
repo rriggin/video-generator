@@ -1,6 +1,6 @@
-# 🎬 Video Generator Agent
+# 🎬 Video Generator Service
 
-A FastAPI-based service that generates training videos from slides and narration scripts.
+A FastAPI-based service that generates training videos from slides and narration scripts. **Designed for programmatic access by CustomGPT and other AI systems.**
 
 ## ⚠️ IMPORTANT: Complete Workflow
 
@@ -12,41 +12,51 @@ A FastAPI-based service that generates training videos from slides and narration
 
 **DON'T skip step 2!** See `docs/API_WORKFLOW.md` for examples.
 
-## 🚀 Quick Start
+## 🚀 **Starting the Service**
 
-### Option 1: One-Command Setup (Recommended)
+### **✅ CORRECT Method (Always Use This)**
 ```bash
-cd agents/video-generator-agent
-./setup_and_run.sh
+# Use the automated startup script
+./start_service.sh
 ```
 
-This script will:
-- Create/activate the virtual environment
-- Install all dependencies from `requirements.txt`
-- Start the service on http://localhost:8000
+This script automatically:
+- ✅ Creates virtual environment (if needed)
+- ✅ Installs/updates dependencies from `requirements.txt`
+- ✅ Starts the service on http://localhost:8000
+- ✅ Handles all path and configuration issues
 
-### Option 2: Manual Setup
+### **❌ DON'T Do This**
 ```bash
-# Navigate to the project root
-cd /path/to/goskills
-
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Navigate to video generator
-cd agents/video-generator-agent
-
-# Start the service
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# Don't manually start these - use ./start_service.sh instead
+python app.py
+python3 app.py
+uvicorn main:app --reload
+source venv/bin/activate && python app.py
 ```
+
+## 🧪 **Verifying the Service**
+
+### **Health Check**
+```bash
+curl http://localhost:8000/
+```
+**Expected Response:**
+```json
+{
+  "message": "Video Generator Service",
+  "version": "1.0.0", 
+  "status": "healthy"
+}
+```
+
+### **API Documentation**
+- **Interactive Docs**: http://localhost:8000/docs
+- **OpenAPI Schema**: http://localhost:8000/openapi.json
 
 ## 📋 Dependencies
 
-All dependencies are managed through the project's `requirements.txt` file:
+All dependencies are managed through `requirements.txt`:
 
 - **FastAPI** - Web framework
 - **Uvicorn** - ASGI server
@@ -70,14 +80,50 @@ All dependencies are managed through the project's `requirements.txt` file:
 ## 📡 API Endpoints
 
 - **Health Check**: `GET /`
-- **Generate Video**: `POST /generate-video`
 - **Upload PDF**: `POST /upload-pdf`
 - **Parse Script**: `POST /parse-script`
+- **Generate Video**: `POST /generate-video`
 - **Upload Slide**: `POST /upload-slide`
 - **API Docs**: `GET /docs`
 
-## 🎯 Example Usage
+## 🎯 **CustomGPT Integration Example**
 
+### **Complete Workflow**
+```python
+import requests
+
+# Step 1: Upload PDF
+with open('presentation.pdf', 'rb') as f:
+    pdf_response = requests.post(
+        'http://localhost:8000/upload-pdf',
+        files={'file': f}
+    )
+slides_data = pdf_response.json()
+
+# Step 2: Parse Script
+with open('script.txt', 'rb') as f:
+    script_response = requests.post(
+        'http://localhost:8000/parse-script',
+        files={'file': f}
+    )
+script_data = script_response.json()
+
+# Step 3: Generate Video
+video_response = requests.post(
+    'http://localhost:8000/generate-video',
+    json={
+        "slides": slides_data["slide_files"],
+        "script": script_data["parsed_segments"],
+        "voice": "female",
+        "include_subtitles": False,
+        "video_quality": "720p"
+    }
+)
+video_data = video_response.json()
+print(f"Video ready: {video_data['video_url']}")
+```
+
+### **Simple cURL Examples**
 ```bash
 # Generate a video with subtitles disabled (default)
 curl -X POST http://localhost:8000/generate-video \
@@ -105,39 +151,128 @@ curl -X POST http://localhost:8000/generate-video \
 
 ## 🧪 Testing
 
-Run tests with the virtual environment:
+### **Run Test Scripts**
 ```bash
-./test_with_venv.sh
+# Test complete workflow
+./scripts/test_complete_workflow.py
+
+# Test PDF upload only
+./scripts/test_pdf_upload.py
+
+# Test with Ohio State data
+./scripts/test_ohio_api.py
 ```
 
 ## 📁 Project Structure
 
 ```
-video-generator-agent/
-├── main.py                 # FastAPI application
-├── video_builder.py        # Core video generation logic
-├── generate_audio.py       # Text-to-speech functionality
-├── setup_and_run.sh       # One-command setup script
-├── test_with_venv.sh      # Test runner script
-├── input/                 # Input files (PDFs, scripts, images)
-├── output/                # Generated videos and assets
-└── README.md             # This file
+video-generator/
+├── start_service.sh          # 🚀 MAIN STARTUP SCRIPT
+├── app.py                    # Entry point (used by startup script)
+├── src/
+│   ├── main.py              # FastAPI application
+│   ├── video_builder.py     # Core video generation logic
+│   └── generate_audio.py    # Text-to-speech functionality
+├── input/                   # Input files (PDFs, scripts, images)
+├── output/                  # Generated videos (gitignored)
+├── temp/                    # Temporary files (gitignored)
+├── logs/                    # Service logs (gitignored)
+├── scripts/                 # Test and utility scripts
+├── docs/                    # Documentation
+├── requirements.txt         # Python dependencies
+└── README.md               # This file
 ```
 
-## 🔄 Development
+## 🔄 Development Workflow
 
-The service uses `--reload` flag, so changes to Python files will automatically restart the server.
+### **Setup (First Time)**
+```bash
+git clone https://github.com/rriggin/video-generator.git
+cd video-generator
+./start_service.sh  # Handles everything automatically
+```
 
-## 🐛 Troubleshooting
+### **Daily Development**
+```bash
+# Start service
+./start_service.sh
 
-### Virtual Environment Issues
-- Use the `setup_and_run.sh` script to avoid venv path issues
-- Ensure you're in the correct directory when running commands
+# Make code changes...
+# Service auto-reloads with --reload flag
 
-### Port Already in Use
-- The script will detect if the service is already running
-- Kill existing processes: `pkill -f uvicorn`
+# Stop service
+Ctrl+C
+```
 
-### Missing Dependencies
-- Run `./setup_and_run.sh` to reinstall all dependencies
-- Check that `requirements.txt` is up to date 
+## 🛠️ Troubleshooting
+
+### **Service Won't Start**
+```bash
+# Check if port 8000 is busy
+lsof -i :8000
+
+# Kill existing processes
+pkill -f uvicorn
+./start_service.sh
+```
+
+### **Dependencies Issues**
+```bash
+# Force reinstall dependencies
+rm venv/.requirements_installed
+./start_service.sh
+```
+
+### **Import Errors**
+- **Problem**: Usually path issues
+- **Solution**: Always use `./start_service.sh` (handles paths correctly)
+
+### **Permission Errors**
+```bash
+chmod +x start_service.sh
+chmod +x scripts/*.sh
+```
+
+### **Virtual Environment Issues**
+- Use `./start_service.sh` to avoid venv path issues
+- The script handles virtual environment creation/activation automatically
+
+## 🔒 **Security & Git**
+
+### **Protected Files (in .gitignore)**
+- `venv/` - Virtual environment
+- `output/` - Generated videos  
+- `temp/` - Temporary files
+- `logs/` - Log files
+- `input/pdfs/*.pdf` - Sensitive input files
+- `input/scripts/*.txt` - Script files
+- `.env*` - Environment files
+
+### **Tracked Files**
+- Source code (`src/`, `app.py`)
+- Documentation (`docs/`, `README.md`)
+- Configuration (`requirements.txt`)
+- Scripts (`scripts/`)
+
+## 📝 **Development Rules**
+
+1. **Always use `./start_service.sh`** - Never manually start services
+2. **Test before committing** - Run test scripts
+3. **Keep sensitive files out of git** - Check .gitignore
+4. **Document API changes** - Update docs/ folder
+5. **Follow 3-step workflow** - Don't skip script parsing
+
+## 🎯 **Ready for CustomGPT Integration!**
+
+This service is designed specifically for **programmatic access** with:
+- ✅ RESTful API endpoints
+- ✅ JSON request/response format  
+- ✅ File upload support
+- ✅ Comprehensive error handling
+- ✅ Automated testing suite
+- ✅ Complete documentation
+
+**Service URL**: http://localhost:8000  
+**API Docs**: http://localhost:8000/docs
+
+**GitHub Repository**: https://github.com/rriggin/video-generator 
