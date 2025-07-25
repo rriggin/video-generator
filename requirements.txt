@@ -1,0 +1,42 @@
+# Video Generator Service - Python Dependencies
+# 
+# 🚀 RECOMMENDED: Use ./start_service.sh to avoid virtual environment issues
+# 
+# Manual install: pip install -r requirements.txt
+# Or with virtual environment:
+#   python3 -m venv venv
+#   source venv/bin/activate  # On Windows: venv\Scripts\activate
+#   pip install -r requirements.txt
+
+# Core Web Framework
+fastapi>=0.100.0,<1.0.0
+uvicorn>=0.23.0,<1.0.0
+pydantic>=2.0.0,<3.0.0
+python-multipart>=0.0.6
+
+# Video Processing (Core Dependencies)
+moviepy>=1.0.3,<2.0.0
+pillow>=10.0.0,<12.0.0
+tqdm>=4.65.0,<5.0.0
+numpy>=1.24.0,<2.0.0
+
+# Audio Generation
+gtts>=2.4.0,<3.0.0
+
+# PDF Processing
+pdf2image>=1.16.3,<2.0.0
+# Note: poppler-utils must be installed via system package manager (brew install poppler)
+
+# HTTP Client & Environment
+requests>=2.31.0,<3.0.0
+python-dotenv>=1.0.0,<2.0.0
+
+# Data Analysis (Optional - for analytics features)
+pandas>=1.5.0,<3.0.0
+matplotlib>=3.5.0,<4.0.0
+seaborn>=0.11.0,<1.0.0
+
+# Development/Testing (Optional)
+# scipy>=1.9.0
+# plotly>=5.0.0
+# jupyter>=1.0.0 
