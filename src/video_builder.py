@@ -109,6 +109,7 @@ class VideoBuilder:
                 # Process each slide and script segment
                 video_clips = []
                 total_duration = 0
+                total_scaled_duration = 0
                 
                 # Create progress bar for overall video generation
                 print(f"🎬 Starting video generation: {len(script)} segments")
@@ -149,6 +150,7 @@ class VideoBuilder:
                     
                     video_clips.append(video_clip)
                     total_duration += script_segment.duration
+                    total_scaled_duration += (script_segment.duration / self.playback_speed)
                     progress_bar.update(1)
                 
                 progress_bar.close()
@@ -190,7 +192,7 @@ class VideoBuilder:
                 for clip in video_clips:
                     clip.close()
                 
-                return str(output_path), total_duration
+                return str(output_path), total_scaled_duration
                 
         except Exception as e:
             raise Exception(f"Video generation failed: {str(e)}")
