@@ -15,7 +15,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
-from moviepy.editor import ImageClip, TextClip, VideoFileClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
+from moviepy.editor import ImageClip, TextClip, VideoFileClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips, speedx
 from gtts import gTTS
 from pydantic import BaseModel
 from tqdm import tqdm
@@ -36,6 +36,7 @@ class VideoBuilder:
         voice: str = "female",
         include_subtitles: bool = False,  # Default to False - no subtitles
         video_quality: str = "720p",
+        playback_speed: float = 1.0,
         subtitle_config: dict = None,
         image_config: dict = None
     ):
@@ -43,12 +44,17 @@ class VideoBuilder:
         self.voice = voice
         self.include_subtitles = include_subtitles
         self.video_quality = video_quality
+        self.playback_speed = playback_speed
         
         # Set video dimensions based on quality - VERTICAL for PDF content
         if video_quality == "1080p":
             self.width, self.height = 1080, 1920  # Vertical 1080p
         else:  # 720p default
             self.width, self.height = 720, 1280   # Vertical 720p
+        
+        # Calculate target FPS based on playback speed
+        # Default 24 FPS * speed multiplier (clamp between 12 and 60 FPS)
+        self.target_fps = max(12, min(60, int(24 * playback_speed)))
         
         # Simple image config - no processing overhead
         self.image_config = image_config or {}
@@ -148,7 +154,8 @@ class VideoBuilder:
                     )
                     
                     video_clips.append(video_clip)
-                    total_duration += script_segment.duration
+                    # Update total duration with scaled duration
+                    total_duration += script_segment.duration / self.playback_speed
                     progress_bar.update(1)
                 
                 progress_bar.close()
@@ -162,12 +169,24 @@ class VideoBuilder:
                     bar_format="{l_bar}{bar}| {desc} [{elapsed}]"
                 )
                 final_video = concatenate_videoclips(video_clips)
+                
+                # Apply playback speed to entire video if not 1.0x
+                if self.playback_speed != 1.0:
+                    print(f"🚀 Applying {self.playback_speed}x speed to final video...")
+                    print(f"🔍 Debug: About to apply speedx with factor {self.playback_speed}")
+                    final_video = final_video.fx(speedx, self.playback_speed)
+                    print(f"✅ Speed effect applied successfully")
+                else:
+                    print(f"⏸️ No speed adjustment needed (playback_speed = {self.playback_speed})")
+                
                 concatenation_progress.update(1)
                 concatenation_progress.close()
                 
                 # Save the final video in organized structure
                 output_path = video_dir / "final_video.mp4"
                 print(f"\n💾 Saving video to: {output_path}")
+                print(f"🎬 Playback speed: {self.playback_speed}x (FPS: {self.target_fps})")
+                print(f"🔍 Debug: playback_speed type: {type(self.playback_speed)}, value: {repr(self.playback_speed)}")
                 save_progress = tqdm(
                     total=1,
                     desc="💾 Encoding video",
@@ -176,7 +195,7 @@ class VideoBuilder:
                 )
                 final_video.write_videofile(
                     str(output_path),
-                    fps=24,
+                    fps=self.target_fps,
                     codec='libx264',
                     audio_codec='aac',
                     verbose=False,  # Suppress MoviePy's own progress output

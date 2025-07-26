@@ -86,7 +86,8 @@ async def generate_video(
     script_file: UploadFile = File(...),
     voice: str = "female",
     include_subtitles: bool = False,
-    video_quality: str = "720p"
+    video_quality: str = "720p",
+    playback_speed: float = 1.0
 ):
     """
     Generate a video from PDF slides and narration script files.
@@ -96,9 +97,20 @@ async def generate_video(
     2. Parses the timestamped script
     3. Generates the final video with narration
     
+    Parameters:
+    - playback_speed: Video playback speed multiplier (default: 1.0)
+                     Examples: 1.25 = 25% faster, 0.75 = 25% slower
+    
     Designed for programmatic access by CustomGPT and other AI systems.
     """
     try:
+        # Validate playback speed
+        if playback_speed < 0.25 or playback_speed > 3.0:
+            raise HTTPException(
+                status_code=400,
+                detail="Playback speed must be between 0.25x and 3.0x"
+            )
+        
         # Step 1: Process PDF to slides
         print("🎬 Step 1: Processing PDF...")
         
@@ -160,6 +172,7 @@ async def generate_video(
             voice=voice,
             include_subtitles=include_subtitles,
             video_quality=video_quality,
+            playback_speed=playback_speed,
             subtitle_config={
                 "position": "bottom",
                 "font_size": 36,
