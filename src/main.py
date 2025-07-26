@@ -48,23 +48,7 @@ class SlideScript(BaseModel):
     duration: int
     slide: str  # URL or local file path
 
-class VideoRequest(BaseModel):
-    slides: List[str]
-    script: List[SlideScript]
-    voice: str = "female"
-    include_subtitles: bool = False  # Changed default to False
-    video_quality: str = "720p"  # 720p, 1080p
-    image_config: Optional[dict] = None
-    subtitle_config: Optional[dict] = {
-        "position": "bottom",  # "top", "bottom", "center"
-        "font_size": 36,
-        "font_color": "white",
-        "stroke_color": "black",
-        "stroke_width": 2,
-        "background_color": None,  # "black", "white", or None for transparent
-        "background_opacity": 0.7,
-        "max_width": 0.8  # Percentage of video width (0.0 to 1.0)
-    }
+
 
 class VideoResponse(BaseModel):
     video_url: str
@@ -85,6 +69,8 @@ class ScriptParseResponse(BaseModel):
     total_duration: int
     message: str
 
+
+
 @app.get("/")
 async def root():
     """Health check endpoint"""
@@ -95,58 +81,120 @@ async def root():
     }
 
 @app.post("/generate-video", response_model=VideoResponse)
-async def generate_video(req: VideoRequest):
+async def generate_video(
+    pdf_file: UploadFile = File(...),
+    script_file: UploadFile = File(...),
+    voice: str = "female",
+    include_subtitles: bool = False,
+    video_quality: str = "720p"
+):
     """
-    Generate a video from slides and narration script.
+    Generate a video from PDF slides and narration script files.
     
-    This endpoint accepts a list of slides and a script with timing information,
-    then generates a professional training video with narration.
+    This endpoint accepts raw PDF and script files and automatically:
+    1. Converts PDF pages to slide images
+    2. Parses the timestamped script
+    3. Generates the final video with narration
+    
+    Designed for programmatic access by CustomGPT and other AI systems.
     """
     try:
+        # Step 1: Process PDF to slides
+        print("🎬 Step 1: Processing PDF...")
+        
+        # Validate PDF file
+        if not pdf_file.content_type == "application/pdf":
+            raise HTTPException(status_code=400, detail="First file must be a PDF")
+        
+        # Generate unique PDF ID
+        pdf_id = str(uuid.uuid4())
+        
+        # Save uploaded PDF
+        pdf_filename = f"{pdf_id}_{pdf_file.filename}"
+        pdf_path = input_dir / "pdfs" / pdf_filename
+        
+        with open(pdf_path, "wb") as buffer:
+            pdf_content = await pdf_file.read()
+            buffer.write(pdf_content)
+        
+        # Convert PDF to images
+        slide_files = await convert_pdf_to_images(pdf_path, pdf_id)
+        print(f"✅ Step 1 complete: {len(slide_files)} slides created")
+        
+        # Step 2: Process script
+        print("🎬 Step 2: Processing script...")
+        
+        # Validate script file
+        if not script_file.content_type.startswith("text/"):
+            raise HTTPException(status_code=400, detail="Second file must be a text file")
+        
+        # Generate unique script ID
+        script_id = str(uuid.uuid4())
+        
+        # Read script content
+        script_content = await script_file.read()
+        script_text = script_content.decode('utf-8')
+        
+        # Save script file
+        script_filename = f"{script_id}_{script_file.filename}"
+        script_path = input_dir / "scripts" / script_filename
+        
+        with open(script_path, "w") as f:
+            f.write(script_text)
+        
+        # Parse script into segments
+        parsed_segments = parse_timestamped_script(script_text)
+        total_duration = sum([seg.duration for seg in parsed_segments]) if parsed_segments else 0
+        
+        print(f"✅ Step 2 complete: {len(parsed_segments)} segments, {total_duration}s duration")
+        
+        # Step 3: Generate video
+        print("🎬 Step 3: Generating video...")
+        
         # Generate unique video ID
         video_id = str(uuid.uuid4())
-        
-        # Look for corresponding script file in input/scripts directory
-        script_file_path = None
-        scripts_dir = input_dir / "scripts"
-        if scripts_dir.exists():
-            # Look for any .txt script files (could be enhanced to match by name)
-            script_files = list(scripts_dir.glob("*.txt"))
-            if script_files:
-                # For now, use the first script file found
-                # In the future, this could be enhanced to match by project name
-                script_file_path = str(script_files[0])
         
         # Initialize video builder
         builder = VideoBuilder(
             output_dir=output_dir,
-            voice=req.voice,
-            include_subtitles=req.include_subtitles,
-            video_quality=req.video_quality,
-            subtitle_config=req.subtitle_config,
-            image_config=req.image_config
+            voice=voice,
+            include_subtitles=include_subtitles,
+            video_quality=video_quality,
+            subtitle_config={
+                "position": "bottom",
+                "font_size": 36,
+                "font_color": "white",
+                "stroke_color": "black", 
+                "stroke_width": 2,
+                "background_opacity": 0.7,
+                "max_width": 0.8
+            },
+            image_config=None
         )
         
         # Generate the video
         video_path, duration = await builder.generate_video(
-            slides=req.slides,
-            script=req.script,
+            slides=slide_files,
+            script=parsed_segments,
             video_id=video_id,
-            script_file_path=script_file_path
+            script_file_path=str(script_path)
         )
         
+        print(f"✅ Step 3 complete: Video generated ({duration}s)")
+        
         # Construct the public URL
-        # In production, this would be your actual domain
         base_url = os.getenv("BASE_URL", "http://localhost:8000")
         video_url = f"{base_url}/output/{video_id}.mp4"
         
         return VideoResponse(
             video_url=video_url,
             video_id=video_id,
-            duration=duration
+            duration=duration,
+            status="success"
         )
         
     except Exception as e:
+        print(f"❌ Video generation failed: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Video generation failed: {str(e)}"
@@ -228,7 +276,7 @@ async def parse_script(file: UploadFile = File(...)):
         # Parse script into segments
         parsed_segments = parse_timestamped_script(script_text)
         
-        total_duration = max([seg.duration for seg in parsed_segments]) if parsed_segments else 0
+        total_duration = sum([seg.duration for seg in parsed_segments]) if parsed_segments else 0
         
         return ScriptParseResponse(
             script_id=script_id,
@@ -243,6 +291,8 @@ async def parse_script(file: UploadFile = File(...)):
             status_code=500,
             detail=f"Script parsing failed: {str(e)}"
         )
+
+
 
 @app.get("/subtitle-config-examples")
 async def get_subtitle_config_examples():
@@ -283,7 +333,7 @@ async def get_subtitle_config_examples():
                 "include_subtitles": False
             }
         },
-        "usage": "Include any of these configurations in your VideoRequest.subtitle_config field"
+        "usage": "Include any of these configurations in the subtitle_config parameter when calling /generate-video"
     }
 
 # Removed complex image config examples - using simple defaults only

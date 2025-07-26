@@ -201,28 +201,33 @@ class VideoBuilder:
         if os.path.exists(slide_name):
             return slide_name
         
-        # Check if it's in the temp directory (processed files)
+        # Check if it's in the temp directory (processed files) - PRIORITY
         temp_slide_path = Path("temp") / slide_name
         if temp_slide_path.exists():
             return str(temp_slide_path)
         
-        # Check if it's in the output directory (uploaded files)
-        output_slide_path = self.output_dir / slide_name
-        if output_slide_path.exists():
-            return str(output_slide_path)
-        
-        # Handle generic slide names by mapping to actual files
+        # Handle generic slide names by mapping to actual files in TEMP directory first
         if slide_name.startswith('slide_') and slide_name.endswith('.png'):
             # Extract slide number from generic name (e.g., "slide_001.png" -> 1)
             try:
                 slide_num = int(slide_name.split('_')[1].split('.')[0])
                 if 1 <= slide_num <= len(slides):
                     actual_slide_name = slides[slide_num - 1]  # Use corresponding actual slide
+                    # Check temp directory FIRST for the actual slide file
+                    temp_actual_path = Path("temp") / actual_slide_name
+                    if temp_actual_path.exists():
+                        return str(temp_actual_path)
+                    # Fallback to output directory
                     output_slide_path = self.output_dir / actual_slide_name
                     if output_slide_path.exists():
                         return str(output_slide_path)
             except (ValueError, IndexError):
                 pass
+        
+        # Check if it's in the output directory (uploaded files) - FALLBACK
+        output_slide_path = self.output_dir / slide_name
+        if output_slide_path.exists():
+            return str(output_slide_path)
         
         # Check if it's a URL
         if slide_name.startswith(('http://', 'https://')):
@@ -231,6 +236,10 @@ class VideoBuilder:
         # Try to find it in the slides list
         for slide in slides:
             if slide.endswith(slide_name) or slide == slide_name:
+                # Check if this slide exists in temp directory
+                temp_slide_path = Path("temp") / slide
+                if temp_slide_path.exists():
+                    return str(temp_slide_path)
                 return slide
         
         raise ValueError(f"Slide not found: {slide_name}")
@@ -413,7 +422,7 @@ class VideoBuilder:
             
             # Add audio if loaded successfully
             if audio_clip and audio_clip.duration > 0:
-                video_clip = video_clip.with_audio(audio_clip)
+                video_clip = video_clip.set_audio(audio_clip)
             
             # Add subtitles if requested (also use actual duration)
             if text and self.include_subtitles:
